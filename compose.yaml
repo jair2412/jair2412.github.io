@@ -1,0 +1,33 @@
+services:
+  web:
+    build:
+      context: .              # la raíz del repo: aquí está index.html
+      dockerfile: web/Dockerfile
+    ports: ["8080:80"]        # único servicio que publica puerto al host
+    depends_on:
+      - api
+
+  api:
+    build: ./api
+    # Ya no publicamos "ports" aquí: ahora solo se llega a la API a través
+    # de "web" (proxy /api/), tal como pide la arquitectura del laboratorio.
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      - db
+
+  db:
+    build: ./db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+
+volumes:
+  datos_db:
