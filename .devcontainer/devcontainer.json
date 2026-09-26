@@ -14,7 +14,7 @@
   // (solo gestiona la tabla nftables). Sin este ajuste, el tráfico ENTRE
   // contenedores (web -> api -> db) se bloquea con timeout, aunque cada
   // servicio por separado funcione bien.
-  "postStartCommand": "sudo iptables-legacy -P FORWARD ACCEPT || true; docker compose up -d",
+  "postStartCommand": "sudo iptables-legacy -P FORWARD ACCEPT || true; docker compose up -d --wait",
 
   "forwardPorts": [8080],
   "portsAttributes": {
