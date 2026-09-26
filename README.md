@@ -72,3 +72,37 @@ posterior generó imágenes con tamaño anómalo (KB en vez de MB) y un error
 de `failed to extract layer ... content digest ... not found`. La caché
 de build de `buildx` había quedado corrupta. Solución:
 `docker builder prune -af` seguido de `docker compose build --no-cache`.
+
+### Reto 1: Imagen mínima
+
+- **Decisión:** Dockerfile de `api` en dos etapas: `node:22-alpine` para
+  instalar dependencias, e imagen final `gcr.io/distroless/nodejs22-debian12:nonroot`
+  para ejecutar (sin shell, sin gestor de paquetes, usuario no root por defecto).
+- **Alternativas que evalué:**
+  - Multi-stage con Alpine en ambas etapas: pasó de 348MB a 244MB (74% de la
+    original) — mejora, pero no suficiente.
+  - La misma versión Alpine, borrando `npm`/`npx`/`corepack` de la imagen
+    final: no cambió el tamaño en absoluto (244MB), porque esos binarios
+    son livianos frente al resto del sistema Alpine.
+  - Distroless `nonroot`: 211MB / 53.4MB de contenido, el mejor resultado
+    (64% de la original).
+- **Por qué elegí esta:** de las tres, es la que menos peso agrega y de
+  paso resuelve otra regla (usuario no root) sin configuración extra.
+- **Fuentes consultadas:**
+  - https://github.com/GoogleContainerTools/distroless
+  - https://docs.docker.com/build/building/multi-stage/
+- **Cómo lo verifiqué:**
+
+docker images jair2412githubio-api # antes: 348MB / 83.3MB
+# después: 211MB / 53.4MB
+docker history jair2412githubio-api:latest --no-trunc
+curl http://localhost:8080/api/health # {"status":"ok"}, la app sigue funcionando
+
+- **Qué no me funcionó:** el criterio pide menos de la mitad del tamaño
+  original, y no lo logré (llegué a 64%, no a <50%). Con `docker history`
+  confirmé que el motivo es que ~124MB de la imagen distroless corresponden
+  al runtime de Node.js en sí (con soporte completo de internacionalización,
+  ICU), no a mi código ni a mis dependencias (`node_modules` pesa apenas
+  5.63MB). No encontré una variante oficial de esa imagen distroless con
+  ICU reducido para aligerar más sin recompilar Node desde cero, algo que
+  quedó fuera del alcance razonable de tiempo para este reto.
