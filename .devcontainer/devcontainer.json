@@ -2,20 +2,14 @@
   "name": "LAB-02: Libro de visitas",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
-    // Da acceso confiable a Docker dentro del Codespace (Docker-in-Docker).
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    }
   },
 
-  // Corre UNA SOLA VEZ, cuando el Codespace se crea por primera vez.
   "postCreateCommand": "docker compose build",
-
-  // Corre EN CADA ARRANQUE (creación y también cada vez que reanudas
-  // un Codespace detenido). Por eso separamos build de up: reanudar
-  // es rápido porque las imágenes ya existen.
   "postStartCommand": "docker compose up -d",
 
-  // Reenvía el puerto de "web" (el único que publica algo) y hace que
-  // se abra solo, sin que el estudiante tenga que buscarlo.
   "forwardPorts": [8080],
   "portsAttributes": {
     "8080": {
