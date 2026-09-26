@@ -3,7 +3,7 @@ services:
     build:
       context: .              # la raíz del repo: aquí está index.html
       dockerfile: web/Dockerfile
-    ports: ["8080:80"]        # único servicio que publica puerto al host
+    ports: ["8080:8080"]        # único servicio que publica puerto al host
     depends_on:
       - api
 

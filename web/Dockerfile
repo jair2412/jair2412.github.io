@@ -1,5 +1,5 @@
 # Imagen oficial de nginx, tag fijo, variante liviana.
-FROM nginx:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 
 # Reemplaza la config por defecto de nginx con la nuestra.
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
@@ -9,4 +9,4 @@ COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html /usr/share/nginx/html/
 COPY libro-de-visitas.js /usr/share/nginx/html/
 
-EXPOSE 80
+EXPOSE 8080
