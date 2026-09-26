@@ -1,0 +1,26 @@
+{
+  "name": "LAB-02: Libro de visitas",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    }
+  },
+
+  "postCreateCommand": "docker compose build",
+
+  // Antes de levantar los contenedores: la tabla iptables-legacy de este
+  // entorno arranca con política FORWARD=DROP, y Docker no la gestiona
+  // (solo gestiona la tabla nftables). Sin este ajuste, el tráfico ENTRE
+  // contenedores (web -> api -> db) se bloquea con timeout, aunque cada
+  // servicio por separado funcione bien.
+  "postStartCommand": "sudo iptables-legacy -P FORWARD ACCEPT || true; docker compose up -d",
+
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "Perfil web (libro de visitas)",
+      "onAutoForward": "openPreview"
+    }
+  }
+}

@@ -143,8 +143,74 @@
         word-break: break-word;
       }
     }
+
+#libro-de-visitas form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    #libro-de-visitas label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    #libro-de-visitas input,
+    #libro-de-visitas textarea {
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    #libro-de-visitas button {
+      align-self: flex-start;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    #libro-de-visitas ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    #libro-de-visitas li {
+      border-top: 1px solid var(--border);
+      padding-top: 0.6rem;
+    }
+
+    #libro-de-visitas li strong {
+      color: var(--primary);
+    }
+
+    #libro-de-visitas li time {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0.15rem 0 0.3rem;
+    }
+
+
   </style>
 </head>
+
+
+
 <body>
   <header>
     <h1 class="titulo">Jair Alegria Medina · Ingeniería Informática</h1>
@@ -191,10 +257,32 @@
         </li>
       </ul>
     </section>
+ <section id="libro-de-visitas" hidden>
+      <h2>Libro de visitas</h2>
+
+      <form id="form-mensaje">
+        <label>Tu nombre
+          <input name="nombre" maxlength="60" required>
+        </label>
+        <label>Tu mensaje
+          <textarea name="mensaje" maxlength="280" rows="3" required></textarea>
+        </label>
+        <button type="submit">Dejar mensaje</button>
+        <p id="form-estado" role="status"></p>
+      </form>
+
+      <ul id="lista-mensajes"></ul>
+    </section>
+
+
 
   </main>
   <footer>
     <p>Hecho con Git y GitHub Pages · IF-1116 · 2026-II</p>
   </footer>
+
+    <script src="libro-de-visitas.js" defer></script>
+
+
 </body>
 </html>
