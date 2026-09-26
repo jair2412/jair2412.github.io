@@ -5,12 +5,19 @@ services:
       dockerfile: web/Dockerfile
     ports: ["8080:8080"]        # único servicio que publica puerto al host
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      # nginx-unprivileged (Alpine) trae wget vía busybox, no curl.
+      # --spider: solo verifica que responda, sin descargar el cuerpo.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   api:
     build: ./api
-    # Ya no publicamos "ports" aquí: ahora solo se llega a la API a través
-    # de "web" (proxy /api/), tal como pide la arquitectura del laboratorio.
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -18,7 +25,25 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      # La imagen de "api" es distroless: no tiene shell ni curl, así que
+      # el healthcheck no puede ser un comando de shell (CMD-SHELL). En
+      # su lugar, ejecutamos Node directamente (forma CMD, sin shell) con
+      # un script de una línea que llama a /api/health y sale con el
+      # código correcto según el status HTTP.
+      test:
+        [
+          "CMD",
+          "/nodejs/bin/node",
+          "-e",
+          "require('http').get('http://localhost:3000/api/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   db:
     build: ./db
@@ -28,6 +53,13 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready viene incluido en la imagen oficial de Postgres.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   datos_db:
