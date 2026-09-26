@@ -8,7 +8,13 @@
   },
 
   "postCreateCommand": "docker compose build",
-  "postStartCommand": "docker compose up -d",
+
+  // Antes de levantar los contenedores: la tabla iptables-legacy de este
+  // entorno arranca con política FORWARD=DROP, y Docker no la gestiona
+  // (solo gestiona la tabla nftables). Sin este ajuste, el tráfico ENTRE
+  // contenedores (web -> api -> db) se bloquea con timeout, aunque cada
+  // servicio por separado funcione bien.
+  "postStartCommand": "sudo iptables-legacy -P FORWARD ACCEPT || true; docker compose up -d",
 
   "forwardPorts": [8080],
   "portsAttributes": {
