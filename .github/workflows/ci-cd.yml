@@ -115,6 +115,7 @@ jobs:
       matrix:
         imagen: [perfil-web, perfil-api]   # un job por imagen
     steps:
+      - uses: actions/checkout@v4          # necesario para leer .trivyignore
       - id: meta
         run: |
           echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
