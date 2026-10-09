@@ -128,6 +128,7 @@ jobs:
 
       - uses: aquasecurity/trivy-action@v0.33.1
         with:
+          version: v0.75.0
           image-ref: ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.imagen }}:${{ steps.meta.outputs.tag }}
           scan-type: image
           severity: CRITICAL               # solo se frena con críticas...
