@@ -1,0 +1,21 @@
+{
+  "name": "jair2412.github.io",
+  "version": "1.0.0",
+  "description": "Sitio personal publicado en https://jair2412.github.io",
+  "main": "libro-de-visitas.js",
+  "scripts": {
+    "test": "vitest run tests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "htmlhint": "^1.9.2",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.11"
+  },
+  "type": "module"
+}
