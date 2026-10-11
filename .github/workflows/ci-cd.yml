@@ -1,0 +1,191 @@
+# .github/workflows/ci-cd.yml
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]       # corre en cada PR hacia main (nunca despliega)
+  push:
+    branches: [main]       # corre en cada merge a main (aquí sí puede desplegar)
+
+permissions:
+  contents: read           # permiso mínimo por defecto para todos los jobs
+
+jobs:
+  # ---------- 2. BUILD: lint + armar el sitio ----------
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4          # descarga el código del repo
+
+      - uses: actions/setup-node@v4        # instala Node 20 y cachea npm
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci                        # instala dependencias exactas del lockfile
+
+      # Linter 1: HTML
+      - run: npx htmlhint index.html
+
+      # Linter 2: Dockerfiles (uno por cada Dockerfile del repo)
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: web/Dockerfile
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: api/Dockerfile
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: db/Dockerfile
+
+      # Linter 3: código de la API y del libro de visitas (JavaScript)
+      - run: npx eslint api libro-de-visitas.js
+
+      # Arma _site/ con solo lo público
+      - run: ./scripts/armar-sitio.sh
+
+      # Sube _site/ como artefacto de Pages (lo usará deploy-prod)
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  # ---------- 3. TEST: Vitest sobre _site/ ----------
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Cada job corre en otra máquina: rearmamos _site/ con el MISMO script
+      - run: ./scripts/armar-sitio.sh
+      - run: npm test
+
+  # ---------- 4. PACKAGE: imágenes a GitHub Packages (ghcr.io) ----------
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write                      # permite publicar en ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+
+      # Calcula el tag (sha-XXXXXXX) y el dueño en minúsculas (ghcr exige minúsculas)
+      - id: meta
+        run: |
+          echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      # Login con el GITHUB_TOKEN del workflow (sin tokens personales)
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Imagen web: el contexto es la raíz porque el Dockerfile copia index.html
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/perfil-web:${{ steps.meta.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      # Imagen api: el contexto es la carpeta api/
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/perfil-api:${{ steps.meta.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  # ---------- 5. SECURITY: Trivy sobre las dos imágenes ----------
+  security:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read                       # solo necesita descargar las imágenes
+    strategy:
+      matrix:
+        imagen: [perfil-web, perfil-api]   # un job por imagen
+    steps:
+      - uses: actions/checkout@v4          # necesario para leer .trivyignore
+      - id: meta
+        run: |
+          echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          version: v0.75.0
+          image-ref: ghcr.io/${{ steps.meta.outputs.owner }}/${{ matrix.imagen }}:${{ steps.meta.outputs.tag }}
+          scan-type: image
+          severity: CRITICAL               # solo se frena con críticas...
+          ignore-unfixed: true             # ...que ya tengan corrección
+          exit-code: 1                     # 1 = el job falla. NUNCA pongas 0
+
+  # ---------- 7. SMOKE: prueba rápida de la misma imagen escaneada ----------
+  smoke:
+    needs: security
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - id: meta
+        run: |
+          echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Descarga (no reconstruye) la imagen y la levanta.
+      # nginx-unprivileged escucha en 8080.
+      # --add-host api:127.0.0.1 evita que nginx falle si su config
+      # hace proxy a un host llamado "api" que aquí no existe.
+      - run: |
+          docker run -d --name web -p 8080:8080 --add-host api:127.0.0.1 \
+            ghcr.io/${{ steps.meta.outputs.owner }}/perfil-web:${{ steps.meta.outputs.tag }}
+
+      # Espera hasta 20 s a que responda 200 y verifica que aparezca tu nombre
+      - run: |
+          for i in $(seq 1 20); do
+            curl -fsS http://localhost:8080/ -o salida.html && break
+            sleep 1
+          done
+          grep -q "Jair Alegria Medina" salida.html
+
+      # Si algo falló, muestra los logs del contenedor para depurar
+      - if: failure()
+        run: docker logs web
+
+  # ---------- 8. DEPLOY PROD: con aprobación manual ----------
+  deploy-prod:
+    needs: smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'   # un PR nunca despliega
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages                   # aquí configuras los Required reviewers
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4      # publica el _site/ subido en build

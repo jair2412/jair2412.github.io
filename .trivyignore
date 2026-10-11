@@ -1,0 +1,5 @@
+# CVE-2026-31789 (OpenSSL): desbordamiento de heap solo en sistemas de 32 bits.
+# Nuestras imágenes corren en 64 bits (amd64), por lo que no es explotable aquí.
+# La imagen base distroless aún no publica la corrección (3.0.19-1~deb12u2).
+# Revisar y eliminar esta línea cuando la base se actualice.
+CVE-2026-31789

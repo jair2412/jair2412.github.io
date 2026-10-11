@@ -1,6 +1,11 @@
 # Imagen oficial de nginx, tag fijo, variante liviana.
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 
+# Actualiza OpenSSL para corregir CVE críticos de la imagen base
+USER root
+RUN apk upgrade --no-cache libcrypto3 libssl3
+USER nginx
+
 # Reemplaza la config por defecto de nginx con la nuestra.
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 
