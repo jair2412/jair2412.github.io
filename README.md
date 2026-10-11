@@ -142,3 +142,15 @@ docker compose ps # los 3 en (healthy)
   Cambié la URL del healthcheck a `http://127.0.0.1:8080/` explícito, en
   vez de agregar soporte IPv6 a nginx (que hubiera sido innecesario, ya
   que nada en la arquitectura del lab necesita IPv6).
+
+## Delivery o deployment
+
+Mi pipeline implementa **Continuous Delivery**: build, test, package, security y smoke
+corren solos en cada cambio, pero `deploy-prod` espera la aprobación de una persona
+(Required reviewers del environment `github-pages`).
+
+**Para pasar a Continuous Deployment** quitaría los *Required reviewers* del environment.
+No habría que cambiar el código del workflow, solo esa configuración.
+
+**Cuándo no lo haría:** si las pruebas no son lo bastante confiables, si no hay rollback
+rápido ni feature flags, o en sectores regulados (banca, salud) donde se exige aprobación humana.
