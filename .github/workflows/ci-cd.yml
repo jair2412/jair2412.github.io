@@ -139,6 +139,7 @@ jobs:
       contents: read
       packages: read
     strategy:
+      fail-fast: false        # que se vean los hallazgos de las tres imágenes, no solo de la primera que falla
       matrix:
         servicio: [web, api, db]
     steps:
