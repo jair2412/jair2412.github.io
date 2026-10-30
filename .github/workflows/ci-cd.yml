@@ -3,8 +3,13 @@
 # Un job por etapa, encadenados con needs. Si uno falla, los siguientes no corren.
 # Las acciones van fijadas por SHA (el tag queda como comentario): un tag se puede mover, un SHA no.
 #
-#   lint ──┬─> test-unit ─> test-integration ─┐
-#   sast ──┴─────────────────────────────────-┴─> package ─> security ─> deploy-dev ─> deploy-staging
+# B6: las cuatro revisiones baratas corren en paralelo, y package espera a las cuatro.
+# Ninguna compuerta se salta: nada se publica sin lint, SAST, unitarias e integración en verde.
+#
+#   lint ─────────────┐
+#   sast ─────────────┤
+#   test-unit ────────┼─> package ─> security ─> deploy-dev ─> deploy-staging
+#   test-integration ─┘
 #
 name: CI/CD
 
@@ -17,6 +22,12 @@ on:
 
 permissions:
   contents: read
+
+# B6: si subo otro commit al mismo PR, el run anterior ya no sirve y se cancela.
+# En main no se cancela nada: cada merge tiene que llegar a su despliegue.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   NODE_VERSION: "22"
@@ -63,8 +74,7 @@ jobs:
 
   test-unit:
     name: 3. Pruebas unitarias y del sitio
-    needs: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest           # B6: ya no espera a lint, corre en paralelo
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -73,13 +83,15 @@ jobs:
           cache: npm
           cache-dependency-path: "**/package-lock.json"
       - run: npm ci && npm ci --prefix api
-      - run: npm run test:unit
-      - run: npm run test:site
+      - run: npm run test:unit -- --reporter=default --reporter=json --outputFile.json=unitarias.json
+      - run: npm run test:site -- --reporter=default --reporter=json --outputFile.json=sitio.json
+      - name: Resumen de las pruebas
+        if: always()
+        run: node scripts/resumen.mjs pruebas "Pruebas unitarias y del sitio" unitarias.json sitio.json
 
   test-integration:
     name: 4. Pruebas de integración (Compose)
-    needs: test-unit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest           # B6: ya no espera a test-unit, corre en paralelo
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -91,7 +103,10 @@ jobs:
         run: |
           echo "DB_PASSWORD=$(openssl rand -hex 12)" > .env
           docker compose up -d --build --wait
-      - run: npm run test:integration
+      - run: npm run test:integration -- --reporter=default --reporter=json --outputFile.json=integracion.json
+      - name: Resumen de las pruebas
+        if: always()
+        run: node scripts/resumen.mjs pruebas "Pruebas de integración (Compose)" integracion.json
       - name: Logs de los contenedores (solo si algo falló)
         if: failure()
         run: docker compose logs
@@ -101,7 +116,7 @@ jobs:
 
   package:
     name: 5. Empaquetar y publicar (${{ matrix.servicio }})
-    needs: [test-integration, sast]
+    needs: [lint, sast, test-unit, test-integration]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,7 +128,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Nombre de la imagen (GHCR exige minúsculas)
         run: echo "IMAGEN=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/demo-cicd-${{ matrix.servicio }}" >> "$GITHUB_ENV"
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      # B6: sin QEMU ni arm64. DEV (runner de GitHub) y STAGING (mi Codespace) son amd64;
+      # emular arm64 era lo más lento del build y nadie usaba esa imagen.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -128,7 +144,7 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./${{ matrix.servicio }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -146,14 +162,19 @@ jobs:
       fail-fast: false        # que se vean los hallazgos de las tres imágenes, no solo de la primera que falla
       matrix:
         servicio: [web, api, db]
+    env:
+      TRIVY_USERNAME: ${{ github.actor }}
+      TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - name: Nombre de la imagen
         run: echo "IMAGEN=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/demo-cicd-${{ matrix.servicio }}" >> "$GITHUB_ENV"
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      # La compuerta: CRITICAL o HIGH con parche detienen el pipeline.
+      - name: Trivy (compuerta CRITICAL,HIGH)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGEN }}:sha-${{ github.sha }}
           severity: CRITICAL,HIGH        # la regla del curso (B1 del LAB-04)
@@ -161,6 +182,13 @@ jobs:
           exit-code: "1"
           format: table
           trivyignores: .trivyignore
+      # B5: el conteo por severidad para el resumen del run. No es la compuerta (esa es el paso anterior):
+      # reutiliza el Trivy y la base de datos que ya instaló la acción, y corre aunque la compuerta falle.
+      - name: Resumen de vulnerabilidades por severidad
+        if: always()
+        run: |
+          trivy image --quiet --format json --output trivy.json --ignorefile .trivyignore "$IMAGEN:sha-${{ github.sha }}"
+          node scripts/resumen.mjs trivy "${{ matrix.servicio }}" trivy.json
 
   deploy-dev:
     name: 7. Deploy DEV (efímero, k3d) y smoke
@@ -205,7 +233,18 @@ jobs:
           kubectl -n demo-dev port-forward svc/web 8080:80 &
           sleep 3
           bash scripts/smoke.sh http://localhost:8080
-          APP_URL=http://localhost:8080 npm run test:integration
+          APP_URL=http://localhost:8080 npm run test:integration -- --reporter=default --reporter=json --outputFile.json=integracion-dev.json
+      - name: Resumen de DEV
+        if: always()
+        run: |
+          node scripts/resumen.mjs pruebas "Smoke e integración contra DEV (k3d)" integracion-dev.json
+          {
+            echo "### 📦 Imágenes que pasaron por DEV"
+            echo
+            echo "Estas son las que se promueven a STAGING, sin reconstruir:"
+            echo
+            for s in web api db; do echo "- \`$PREFIJO-$s:sha-${{ github.sha }}\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Diagnóstico (solo si algo falló)
         if: failure()
         run: |
@@ -237,3 +276,16 @@ jobs:
           kubectl -n demo-staging rollout status deploy/web --timeout=180s
       - name: Smoke test
         run: bash scripts/smoke.sh http://localhost:30080
+      - name: Resumen de STAGING
+        if: always()
+        run: |
+          {
+            echo "### 🚀 STAGING (${{ job.status }})"
+            echo
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- URL: http://localhost:30080 (en el Codespace del runner)"
+            echo
+            echo '```'
+            kubectl -n demo-staging get pods -o custom-columns=POD:.metadata.name,ESTADO:.status.phase,IMAGEN:.spec.containers[0].image
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
