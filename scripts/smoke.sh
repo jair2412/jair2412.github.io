@@ -37,7 +37,13 @@ CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/mensajes" \
 echo "OK  POST /api/mensajes 201"
 
 # 5. Y aparece en la lista
-curl -s "$BASE/api/mensajes" | grep -q "$TEXTO" || { echo "FALLO: el mensaje creado no aparece en la lista"; exit 1; }
+# Con reintentos cortos: justo después de un rollout, un pod viejo de api que se está apagando
+# todavía puede recibir una petición y responder con error (pasó en el run de main del PR #13).
+for i in $(seq 1 5); do
+  if curl -s "$BASE/api/mensajes" | grep -q "$TEXTO"; then break; fi
+  if [ "$i" = "5" ]; then echo "FALLO: el mensaje creado no aparece en la lista"; curl -s "$BASE/api/mensajes" | head -c 300; exit 1; fi
+  sleep 2
+done
 echo "OK  GET /api/mensajes  contiene el mensaje"
 
 echo "Smoke test: todo en verde"
