@@ -30,14 +30,27 @@ done
 echo "OK  GET /api/health  ok"
 
 # 4. Se puede crear un mensaje
+# Con reintentos cortos ante 5xx: justo después de un rollout, un pod viejo de api que se está apagando
+# todavía puede recibir la petición con una conexión al Postgres anterior y nginx responde 502/504
+# (pasó en STAGING en los runs de main de los PR #13 y #26). Un 4xx no se reintenta: eso sí es un error.
 TEXTO="smoke $(date +%s)"
-CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/mensajes" \
-  -H 'Content-Type: application/json' -d "{\"nombre\":\"Smoke\",\"mensaje\":\"$TEXTO\"}")
+for i in $(seq 1 5); do
+  CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/mensajes" \
+    -H 'Content-Type: application/json' -d "{\"nombre\":\"Smoke\",\"mensaje\":\"$TEXTO\"}")
+  case "$CODIGO" in 5*) [ "$i" = "5" ] || { sleep 3; continue; } ;; esac
+  break
+done
 [ "$CODIGO" = "201" ] || { echo "FALLO: POST /api/mensajes devolvió $CODIGO"; exit 1; }
 echo "OK  POST /api/mensajes 201"
 
 # 5. Y aparece en la lista
-curl -s "$BASE/api/mensajes" | grep -q "$TEXTO" || { echo "FALLO: el mensaje creado no aparece en la lista"; exit 1; }
+# Con reintentos cortos: justo después de un rollout, un pod viejo de api que se está apagando
+# todavía puede recibir una petición y responder con error (pasó en el run de main del PR #13).
+for i in $(seq 1 5); do
+  if curl -s "$BASE/api/mensajes" | grep -q "$TEXTO"; then break; fi
+  if [ "$i" = "5" ]; then echo "FALLO: el mensaje creado no aparece en la lista"; curl -s "$BASE/api/mensajes" | head -c 300; exit 1; fi
+  sleep 2
+done
 echo "OK  GET /api/mensajes  contiene el mensaje"
 
 echo "Smoke test: todo en verde"

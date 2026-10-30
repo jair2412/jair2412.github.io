@@ -7,7 +7,7 @@ export default [
   { rules: { "no-unused-vars": ["error", { argsIgnorePattern: "^_" }] } },   // los middlewares de Express necesitan 4 argumentos
   { ignores: ["node_modules/", "api/node_modules/", "coverage/", "_site/"] },
   {
-    files: ["api/**/*.js", "tests/**/*.js", "eslint.config.js"],
+    files: ["api/**/*.js", "tests/**/*.js", "scripts/**/*.mjs", "eslint.config.js"],
     languageOptions: { ecmaVersion: 2022, sourceType: "module", globals: globals.node },
   },
   {
