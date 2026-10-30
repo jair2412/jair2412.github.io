@@ -1,17 +1,14 @@
-# Imagen oficial de nginx, tag fijo, variante liviana.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+# web: nginx sirviendo la página y reenviando /api/ al backend.
+# Imagen "unprivileged": corre como usuario nginx (uid 101) y escucha en 8080.
+FROM nginxinc/nginx-unprivileged:1.29-alpine
 
-# Actualiza OpenSSL para corregir CVE críticos de la imagen base
+# Parches de seguridad de Alpine que la imagen base todavía no trae (Trivy CRITICAL,HIGH, B1 del LAB-04).
+# apk necesita root; después se vuelve al usuario nginx (uid 101).
 USER root
-RUN apk upgrade --no-cache libcrypto3 libssl3
-USER nginx
+RUN apk upgrade --no-cache
+USER 101
 
-# Reemplaza la config por defecto de nginx con la nuestra.
-COPY web/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copia los archivos estáticos del perfil. Como el contexto de build es la
-# raíz del repo (definido en compose.yaml), estas rutas parten de ahí.
-COPY index.html /usr/share/nginx/html/
-COPY libro-de-visitas.js /usr/share/nginx/html/
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY public/ /usr/share/nginx/html/
 
 EXPOSE 8080

@@ -1,28 +1,18 @@
-import js from '@eslint/js'
-import globals from 'globals'
+// ESLint 9, configuración plana. Node para la API y las pruebas, navegador para el frontend.
+import js from "@eslint/js";
+import globals from "globals";
 
 export default [
-  // Reglas recomendadas de ESLint para todo el código
   js.configs.recommended,
-
-  // La API corre en Node.js (CommonJS): habilita globals como process y require
+  { rules: { "no-unused-vars": ["error", { argsIgnorePattern: "^_" }] } },   // los middlewares de Express necesitan 4 argumentos
+  { ignores: ["node_modules/", "api/node_modules/", "coverage/", "_site/"] },
   {
-    files: ['api/**/*.js'],
-    languageOptions: { sourceType: 'commonjs', globals: globals.node },
-    rules: {
-      // Express exige 4 parámetros en el manejador de errores (err, req, res, next)
-      // aunque no se use "next". Por convención, los parámetros que empiezan
-      // con "_" se declaran como no usados a propósito y ESLint los ignora.
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    },
+    files: ["api/**/*.js", "tests/**/*.js", "eslint.config.js"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "module", globals: globals.node },
   },
-
-  // El libro de visitas corre en el navegador: habilita document, fetch, etc.
   {
-    files: ['libro-de-visitas.js'],
-    languageOptions: { sourceType: 'script', globals: globals.browser },
+    // web/public: el libro de visitas del LAB-04. libro-de-visitas.js: el de mi perfil en GitHub Pages
+    files: ["web/public/**/*.js", "libro-de-visitas.js"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "script", globals: globals.browser },
   },
-
-  // Carpetas que ESLint debe ignorar
-  { ignores: ['node_modules/**', '_site/**', 'api/node_modules/**'] },
-]
+];
