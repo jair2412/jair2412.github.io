@@ -10,6 +10,12 @@ const pool = new pg.Pool({
   user: process.env.DB_USER || "app",
   password: process.env.DB_PASSWORD || "",
   connectionTimeoutMillis: 3000,
+  // Después de un despliegue, Postgres se recrea (strategy: Recreate) y las conexiones que el pool tenía
+  // abiertas quedan apuntando a un pod que ya no existe: una consulta sobre ellas se cuelga hasta que
+  // nginx corta con 504. Con estos dos valores una conexión ociosa se cierra al segundo, y una consulta
+  // que no contesta falla a los 4 s; pool.query descarta esa conexión y la siguiente abre una nueva.
+  idleTimeoutMillis: 1000,
+  query_timeout: 4000,
 });
 // Sin esto, un corte de conexión con la base tumba el proceso entero.
 pool.on("error", (e) => console.error("Postgres:", e.message));
