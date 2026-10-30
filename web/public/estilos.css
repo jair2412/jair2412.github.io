@@ -11,3 +11,10 @@ section { margin-block: 2.5rem; }
 #lista-mensajes li { border: 1px solid #8884; border-radius: .5rem; padding: .75rem 1rem; }
 #lista-mensajes time { margin-left: .5rem; font-size: .8rem; opacity: .7; }
 #lista-mensajes p { margin: .25rem 0 0; }
+
+/* B4: total de mensajes junto al título */
+.total {
+  font-size: 0.5em;
+  font-weight: normal;
+  opacity: 0.75;
+}

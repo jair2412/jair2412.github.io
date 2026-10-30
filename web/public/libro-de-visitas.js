@@ -9,6 +9,7 @@ const seccion = document.getElementById("libro-de-visitas");
 const lista = document.getElementById("lista-mensajes");
 const form = document.getElementById("form-mensaje");
 const estado = document.getElementById("form-estado");
+const total = document.getElementById("total-mensajes");
 
 function pintar(mensajes) {
   lista.replaceChildren(
@@ -27,12 +28,22 @@ function pintar(mensajes) {
   );
 }
 
+// B4: el total de mensajes, junto al título. Si la API no contesta, el contador se queda oculto.
+async function cargarTotal() {
+  const r = await fetch(`${API}/estadisticas`, { headers: { Accept: "application/json" } });
+  if (!r.ok) return;
+  const { total: n } = await r.json();
+  total.textContent = `(${n} ${n === 1 ? "mensaje" : "mensajes"})`;
+  total.hidden = false;
+}
+
 async function cargar() {
   const r = await fetch(`${API}/mensajes`, { headers: { Accept: "application/json" } });
   // En GitHub Pages /api/mensajes devuelve un 404 con HTML: eso NO es la API.
   const esJson = (r.headers.get("content-type") || "").includes("application/json");
   if (!r.ok || !esJson) throw new Error(`la API no está disponible (HTTP ${r.status})`);
   pintar(await r.json());
+  await cargarTotal();
 }
 
 form.addEventListener("submit", async (e) => {

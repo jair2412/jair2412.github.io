@@ -81,3 +81,19 @@ describe("GET /metrics", () => {
     expect(r.text).toContain("http_request_duration_seconds");
   });
 });
+
+describe("GET /api/estadisticas", () => {
+  it("devuelve el total de mensajes como número", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ total: 42 }] });
+    const r = await request(appConPool(query)).get("/api/estadisticas");
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ total: 42 });
+    expect(query.mock.calls[0][0]).toMatch(/COUNT\(\*\)/i);
+  });
+
+  it("responde 500 sin filtrar el detalle si la consulta falla", async () => {
+    const r = await request(appConPool(vi.fn().mockRejectedValue(new Error("boom")))).get("/api/estadisticas");
+    expect(r.status).toBe(500);
+    expect(JSON.stringify(r.body)).not.toContain("boom");
+  });
+});

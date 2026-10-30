@@ -44,6 +44,15 @@ export function crearApp({ pool, registro = new client.Registry() }) {
     } catch (e) { next(e); }
   });
 
+  // B4 del LAB-04: cuántos mensajes hay. La página lo muestra junto al título.
+  app.get("/api/estadisticas", async (_req, res, next) => {
+    try {
+      // COUNT devuelve bigint y pg lo entrega como texto: ::int lo deja como número en el JSON.
+      const { rows } = await pool.query("SELECT COUNT(*)::int AS total FROM mensajes");
+      res.json({ total: rows[0].total });
+    } catch (e) { next(e); }
+  });
+
   app.post("/api/mensajes", async (req, res, next) => {
     const nombre = String(req.body?.nombre ?? "").trim();
     const mensaje = String(req.body?.mensaje ?? "").trim();
