@@ -1,72 +1,78 @@
-// Libro de visitas: API del LAB-02 en Node.js (Express + pg).
+// Libro de visitas: la aplicación Express, separada del arranque del servidor.
 //
-// Toda la configuración entra por variables de entorno. Aquí no hay ni una
-// contraseña ni un nombre de host escrito a mano, y así debe seguir.
-const express = require("express");
-const { Pool } = require("pg");
+// crearApp recibe el pool de Postgres desde afuera. Así las pruebas unitarias
+// le pasan un pool falso y no necesitan una base de datos de verdad.
+// Toda la configuración entra por variables de entorno: aquí no hay contraseñas.
+import express from "express";
+import client from "prom-client";
 
-const port = process.env.PORT || 3000;
-const pool = new Pool({
-  host: process.env.DB_HOST || "db",
-  port: Number(process.env.DB_PORT || 5432),
-  database: process.env.DB_NAME || "libro",
-  user: process.env.DB_USER || "app",
-  password: process.env.DB_PASSWORD || "",
-  connectionTimeoutMillis: 3000,
-});
-// Sin esto, un corte de conexión con la base tumba el proceso entero.
-pool.on("error", (e) => console.error("Postgres:", e.message));
+export function crearApp({ pool, registro = new client.Registry() }) {
+  const app = express();
+  app.use(express.json({ limit: "10kb" }));
 
-const app = express();
-app.use(express.json({ limit: "10kb" }));
+  // Métricas RED (rate, errors, duration) por ruta. Prometheus las lee en /metrics.
+  client.collectDefaultMetrics({ register: registro });
+  const duracion = new client.Histogram({
+    name: "http_request_duration_seconds",
+    help: "Duración de las peticiones HTTP",
+    labelNames: ["method", "route", "status"],
+    buckets: [0.01, 0.05, 0.1, 0.3, 1, 3],
+    registers: [registro],
+  });
+  app.use((req, res, next) => {
+    const fin = duracion.startTimer();
+    res.on("finish", () => fin({ method: req.method, route: req.path, status: res.statusCode }));
+    next();
+  });
 
-app.get("/api/health", async (_req, res) => {
-  // "Estoy vivo" no alcanza: si no puedo hablar con la base, no estoy sano.
-  try {
-    await pool.query("SELECT 1");
-    res.json({ status: "ok" });
-  } catch (e) {
-    res.status(503).json({ status: "error", detalle: e.message });
-  }
-});
+  app.get("/api/health", async (_req, res) => {
+    // "Estoy vivo" no alcanza: si no puedo hablar con la base, no estoy sano.
+    try {
+      await pool.query("SELECT 1");
+      res.json({ status: "ok" });
+    } catch (e) {
+      res.status(503).json({ status: "error", detalle: e.message });
+    }
+  });
 
-app.get("/api/mensajes", async (_req, res, next) => {
-  try {
-    const { rows } = await pool.query(
-      "SELECT id, nombre, mensaje, fecha FROM mensajes ORDER BY fecha DESC, id DESC LIMIT 100"
-    );
-    res.json(rows);
-  } catch (e) { next(e); }
-});
+  app.get("/api/mensajes", async (_req, res, next) => {
+    try {
+      const { rows } = await pool.query(
+        "SELECT id, nombre, mensaje, fecha FROM mensajes ORDER BY fecha DESC, id DESC LIMIT 100"
+      );
+      res.json(rows);
+    } catch (e) { next(e); }
+  });
 
-app.post("/api/mensajes", async (req, res, next) => {
-  const nombre = String(req.body?.nombre ?? "").trim();
-  const mensaje = String(req.body?.mensaje ?? "").trim();
+  app.post("/api/mensajes", async (req, res, next) => {
+    const nombre = String(req.body?.nombre ?? "").trim();
+    const mensaje = String(req.body?.mensaje ?? "").trim();
 
-  if (!nombre || !mensaje) return res.status(400).json({ error: "Faltan el nombre o el mensaje." });
-  if (nombre.length > 60) return res.status(400).json({ error: "El nombre no puede pasar de 60 caracteres." });
-  if (mensaje.length > 280) return res.status(400).json({ error: "El mensaje no puede pasar de 280 caracteres." });
+    if (!nombre || !mensaje) return res.status(400).json({ error: "Faltan el nombre o el mensaje." });
+    if (nombre.length > 60) return res.status(400).json({ error: "El nombre no puede pasar de 60 caracteres." });
+    if (mensaje.length > 280) return res.status(400).json({ error: "El mensaje no puede pasar de 280 caracteres." });
 
-  try {
-    const { rows } = await pool.query(
-      // Parámetros, nunca concatenar texto del usuario dentro del SQL.
-      "INSERT INTO mensajes (nombre, mensaje) VALUES ($1, $2) RETURNING id, nombre, mensaje, fecha",
-      [nombre, mensaje]
-    );
-    res.status(201).json(rows[0]);
-  } catch (e) { next(e); }
-});
+    try {
+      const { rows } = await pool.query(
+        // Parámetros, nunca concatenar texto del usuario dentro del SQL.
+        "INSERT INTO mensajes (nombre, mensaje) VALUES ($1, $2) RETURNING id, nombre, mensaje, fecha",
+        [nombre, mensaje]
+      );
+      res.status(201).json(rows[0]);
+    } catch (e) { next(e); }
+  });
 
-// JSON mal formado en el cuerpo: es culpa del cliente, no un 500.
-app.use((err, _req, res, _next) => {
-  if (err.type === "entity.parse.failed") return res.status(400).json({ error: "El cuerpo no es JSON válido." });
-  console.error(err.message);
-  res.status(500).json({ error: "Error interno." });
-});
+  app.get("/metrics", async (_req, res) => {
+    res.set("Content-Type", registro.contentType);
+    res.end(await registro.metrics());
+  });
 
-const server = app.listen(port, "0.0.0.0", () => console.log(`API escuchando en el puerto ${port}`));
+  // JSON mal formado en el cuerpo: es culpa del cliente, no un 500.
+  app.use((err, _req, res, _next) => {
+    if (err.type === "entity.parse.failed") return res.status(400).json({ error: "El cuerpo no es JSON válido." });
+    console.error(err.message);
+    res.status(500).json({ error: "Error interno." });
+  });
 
-// Sin esto, "docker stop" tarda 10 segundos: el proceso ignora la señal de apagado.
-for (const s of ["SIGINT", "SIGTERM"]) {
-  process.on(s, () => { console.log(`Señal ${s}: cerrando`); server.close(() => pool.end().then(() => process.exit(0))); });
+  return app;
 }

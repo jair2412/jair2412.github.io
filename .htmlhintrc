@@ -4,6 +4,11 @@
   "attr-value-double-quotes": true,
   "doctype-first": true,
   "tag-pair": true,
+  "spec-char-escape": true,
   "id-unique": true,
-  "alt-require": true
+  "src-not-empty": true,
+  "attr-no-duplication": true,
+  "title-require": true,
+  "alt-require": true,
+  "html-lang-require": true
 }

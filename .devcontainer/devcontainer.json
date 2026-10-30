@@ -1,26 +1,29 @@
 {
-  "name": "LAB-02: Libro de visitas",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "name": "LAB-04: pipeline end-to-end",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "moby": false
-    }
+    // moby: false, igual que en el LAB-02: el moby del feature fallaba en este Codespace
+    "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false },
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "minikube": "none" },
+    // Para entrar por "gh codespace ssh"
+    "ghcr.io/devcontainers/features/sshd:1": {}
   },
 
-  "postCreateCommand": "docker compose build",
+  // kind con versión fija: con él vive STAGING dentro del Codespace (ver scripts/staging-codespace.sh)
+  "postCreateCommand": "npm ci && npm ci --prefix api && sudo curl -fsSLo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64 && sudo chmod +x /usr/local/bin/kind",
 
-  // Antes de levantar los contenedores: la tabla iptables-legacy de este
-  // entorno arranca con política FORWARD=DROP, y Docker no la gestiona
-  // (solo gestiona la tabla nftables). Sin este ajuste, el tráfico ENTRE
-  // contenedores (web -> api -> db) se bloquea con timeout, aunque cada
-  // servicio por separado funcione bien.
-  "postStartCommand": "sudo iptables-legacy -P FORWARD ACCEPT || true; docker compose up -d --wait",
+  // La tabla iptables-legacy arranca con FORWARD=DROP y bloquea el tráfico entre contenedores (bitácora del LAB-02).
+  // Después, si STAGING y el runner ya existen, los vuelve a prender.
+  "postStartCommand": "sudo iptables-legacy -P FORWARD ACCEPT || true; bash scripts/staging-codespace.sh arrancar || true",
 
-  "forwardPorts": [8080],
+  "forwardPorts": [8080, 30080],
   "portsAttributes": {
-    "8080": {
-      "label": "Perfil web (libro de visitas)",
-      "onAutoForward": "openPreview"
+    "8080": { "label": "Compose (web)" },
+    "30080": { "label": "STAGING (kind)" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "ms-azuretools.vscode-docker", "github.vscode-github-actions"]
     }
   }
 }
