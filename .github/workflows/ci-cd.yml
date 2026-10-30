@@ -42,7 +42,7 @@ jobs:
           failure-threshold: warning
 
   sast:
-    name: 2. SAST (Semgrep) y secretos (Gitleaks)
+    name: 2. SAST y secretos
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,10 +52,14 @@ jobs:
         run: >
           docker run --rm -v "$PWD:/src:ro" semgrep/semgrep:1.180.0
           semgrep scan --config p/ci --config p/dockerfile --error --metrics=off /src
-      - name: Gitleaks, secretos en el historial de Git
+      # B2: TruffleHog en lugar de Gitleaks. Revisa todo el historial igual que Gitleaks, pero además
+      # intenta verificar cada hallazgo contra el servicio real (¿el token sigue vivo?), y eso ayuda a priorizar.
+      # --results incluye los no verificados: un secreto que hoy no responde igual no debe estar en Git.
+      # --fail: si encuentra algo, sale con código 183 y el job se pone en rojo.
+      - name: TruffleHog, secretos en el historial de Git
         run: >
-          docker run --rm -v "$PWD:/repo:ro" --entrypoint sh ghcr.io/gitleaks/gitleaks:v8.30.1
-          -c "git config --global --add safe.directory /repo && gitleaks git /repo --redact -v --exit-code 1"
+          docker run --rm -v "$PWD:/repo:ro" trufflesecurity/trufflehog:3.99.7
+          git file:///repo --results=verified,unknown,unverified --fail --no-update
 
   test-unit:
     name: 3. Pruebas unitarias y del sitio
@@ -159,7 +163,7 @@ jobs:
           trivyignores: .trivyignore
 
   deploy-dev:
-    name: 7. Deploy DEV (efímero) y smoke
+    name: 7. Deploy DEV (efímero, k3d) y smoke
     needs: security
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -175,10 +179,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: echo "PREFIJO=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/demo-cicd" >> "$GITHUB_ENV"
-      - name: Crear el clúster (kind)
-        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
-        with:
-          cluster_name: dev
+      # B2: k3d en lugar de kind. k3s (el Kubernetes liviano de Rancher) dentro de Docker:
+      # un clúster de verdad igual que kind, pero arranca más rápido. El binario va con versión fija.
+      - name: Crear el clúster (k3d)
+        run: |
+          sudo curl -fsSLo /usr/local/bin/k3d https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64
+          sudo chmod +x /usr/local/bin/k3d
+          k3d cluster create dev --wait --timeout 120s --no-lb
+          kubectl get nodes
       - name: Namespace y secretos
         run: |
           kubectl create namespace demo-dev
