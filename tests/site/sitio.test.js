@@ -36,6 +36,12 @@ describe("index.html", () => {
     }
   });
 
+  it("tiene el contador de mensajes junto al título, oculto hasta que la API conteste", () => {
+    const total = doc.querySelector("h1 #total-mensajes");
+    expect(total).not.toBeNull();
+    expect(total.hasAttribute("hidden")).toBe(true);
+  });
+
   it("el libro de visitas arranca oculto y tiene el formulario completo", () => {
     const seccion = doc.querySelector("#libro-de-visitas");
     expect(seccion?.hasAttribute("hidden")).toBe(true);
