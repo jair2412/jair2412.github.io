@@ -5,7 +5,7 @@
 | Lab | Puntaje | Captura | Carpeta |
 |-----|---------|---------|---------|
 | GSP233: Deploy Kubernetes Load Balancer Service with Terraform | 100/100 | [evidencia/gsp233.png](evidencia/gsp233.png) | [01-gsp233/](01-gsp233/) |
-| GSP497: Cloud Operations for GKE | 100/100 | [evidencia/gsp497.png](evidencia/gsp497.png), [evidencia/monitoring.png](evidencia/monitoring.png) | [02-gsp497/](02-gsp497/) |
+| GSP497: Cloud Operations for GKE | 100/100 | [evidencia/gsp497.png](evidencia/gsp497.png) | [02-gsp497/](02-gsp497/) |
 | GSP345: Build Infrastructure with Terraform on Google Cloud: Challenge Lab | 100/100 | [evidencia/gsp345.png](evidencia/gsp345.png) | [03-gsp345/](03-gsp345/) |
 
 ### GSP345 por tarea
@@ -43,9 +43,8 @@
 
 - [plan-inicial.txt](02-gsp497/plan-inicial.txt): `Plan: 5 to add, 0 to change, 0 to destroy`.
 - [destroy.txt](02-gsp497/destroy.txt): termina con `Destroy complete! Resources: 5 destroyed.` Coincide con los 5 del plan.
-- Captura de Monitoring: [evidencia/monitoring.png](evidencia/monitoring.png).
 
-**Qué me costó.** El primer `make teardown` lo corrí sin guardar la salida en un archivo. Como el estado quedó vacío, volví a hacer el ciclo completo: generé las variables con `scripts/generate-tfvars.sh` (lo mismo que hace `make create` por dentro), guardé el plan inicial, volví a crear con `make create`, tomé la captura de Monitoring y destruí otra vez con `make teardown 2>&1 | tee destroy.txt`. El `destroy.txt` traía los colores de la terminal como códigos de escape; se los quité para que se lea en GitHub.
+**Qué me costó.** El primer `make teardown` lo corrí sin guardar la salida en un archivo. Como el estado quedó vacío, volví a hacer el ciclo completo: generé las variables con `scripts/generate-tfvars.sh` (lo mismo que hace `make create` por dentro), guardé el plan inicial, volví a crear con `make create`, revisé las métricas en Monitoring y destruí otra vez con `make teardown 2>&1 | tee destroy.txt`. El `destroy.txt` traía los colores de la terminal como códigos de escape; se los quité para que se lea en GitHub.
 
 **Qué cambiaría.** Leer el `Makefile` y los scripts antes de empezar: ahí se ve que `make teardown` además borra `terraform.tfvars` y el estado local, así que después ya no se puede rehacer el plan sin regenerar las variables.
 
