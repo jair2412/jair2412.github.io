@@ -4,3 +4,10 @@ Thumbs.db
 node_modules/
 coverage/
 _site/
+
+# Terraform (LAB-05): nunca subir estado, providers descargados ni planes binarios
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+tfplan
