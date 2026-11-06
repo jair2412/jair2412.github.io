@@ -1,0 +1,10 @@
+NAMESPACE     NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP      PORT(S)            AGE     SELECTOR
+default       kubernetes             ClusterIP      34.118.224.1     <none>           443/TCP            9m2s    <none>
+gmp-system    alertmanager           ClusterIP      None             <none>           9093/TCP           7m7s    app.kubernetes.io/name=alertmanager,app=managed-prometheus-alertmanager
+gmp-system    gmp-operator           ClusterIP      34.118.227.71    <none>           8443/TCP,443/TCP   7m6s    app.kubernetes.io/component=operator,app.kubernetes.io/name=gmp-operator,app.kubernetes.io/part-of=gmp
+gmp-system    rule-evaluator         ClusterIP      34.118.233.149   <none>           19092/TCP          7m6s    app.kubernetes.io/name=rule-evaluator
+kube-system   default-http-backend   NodePort       34.118.237.214   <none>           80:30381/TCP       7m14s   k8s-app=glbc
+kube-system   kube-dns               ClusterIP      34.118.224.10    <none>           53/UDP,53/TCP      8m23s   k8s-app=kube-dns
+kube-system   kube-dns-upstream      ClusterIP      34.118.225.231   <none>           53/UDP,53/TCP      6m43s   k8s-app=kube-dns
+kube-system   metrics-server         ClusterIP      34.118.238.33    <none>           443/TCP            6m59s   k8s-app=metrics-server
+staging       nginx                  LoadBalancer   34.118.238.205   136.108.183.69   80:30196/TCP       6m19s   run=nginx
