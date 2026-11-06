@@ -12,7 +12,10 @@ FROM postgres:16-alpine
 #   equivalente en C que trae Alpine, con los mismos argumentos, así que lo reemplazamos en vez de ignorar las CVE.
 #   Se borra el gosu de la capa base (Trivy solo deja de verlo si hay un borrado real, no si se sobrescribe)
 #   y se pone "gosu" en /usr/local/sbin, que va antes en el PATH, apuntando a su-exec.
-RUN apk upgrade --no-cache \
+# APK_FECHA cambia cada día (la pasa el pipeline) y obliga a rehacer esta capa: sin ella, la caché
+# de Actions reutiliza el apk upgrade de otro día y la imagen sale sin los parches nuevos.
+ARG APK_FECHA
+RUN echo "Parches de Alpine al ${APK_FECHA}" && apk upgrade --no-cache \
  && apk add --no-cache su-exec=0.3-r0 \
  && rm /usr/local/bin/gosu /usr/local/bin/su-exec \
  && mkdir -p /usr/local/sbin && ln -s /sbin/su-exec /usr/local/sbin/gosu
